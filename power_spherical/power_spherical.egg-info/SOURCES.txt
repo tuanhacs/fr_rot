@@ -1,0 +1,10 @@
+LICENSE
+README.md
+setup.py
+power_spherical/__init__.py
+power_spherical/distributions.py
+power_spherical.egg-info/PKG-INFO
+power_spherical.egg-info/SOURCES.txt
+power_spherical.egg-info/dependency_links.txt
+power_spherical.egg-info/requires.txt
+power_spherical.egg-info/top_level.txt

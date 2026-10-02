@@ -1,0 +1,135 @@
+import argparse
+
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--num_iter',
+        type=int,
+        default=2500,
+        help='Mumber of training epochs')
+    parser.add_argument(
+        '--L',
+        type=int,
+        default=1000,
+        help='Total number of lines')
+    parser.add_argument(
+        '--n_lines',
+        type=int,
+        default=4,
+        help='TWD: Number of lines in each tree')
+    parser.add_argument(
+        '--lr_sw',
+        type=float,
+        default=1e-3,
+        help='learning rate of SW methods')
+    parser.add_argument(
+        '--lr_tsw_sl',
+        type=float,
+        default=1e-3,
+        help='TWD: learning rate of TWD methods')
+    parser.add_argument(
+        '--delta',
+        type=float,
+        default=50.,
+        help='TWD: delta to tune distance-based')
+    parser.add_argument(
+        '--p_tsw',
+        type=float,
+        default=1,
+        help='p value in Tree-Sliced Wasserstein-p distance')
+    parser.add_argument(
+        '--dataset_name',
+        type=str,
+        default='25gaussians',
+        help='Name of the dataset, could be []')   
+    parser.add_argument(
+        '--std',
+        type=float,
+        default=0.1,
+        help='TWD: std to generate root of trees')
+    parser.add_argument(
+        '--num_seeds',
+        type=int,
+        default=5,
+        help='Number of random seeds')
+    parser.add_argument(
+        '--plot',
+        action='store_true',
+        default=False,
+        help='turn on to plot diagram')
+    parser.add_argument(
+        '--eval_sb',
+        action='store_true',
+        default=False,
+        help='evaluate only sobolev')
+    parser.add_argument(
+        "--p_agg",
+        type=float,
+        default=2,
+        help="p value for aggregating tree distances in OSbTS and TWD"
+    )
+    parser.add_argument(
+        "--p_noise",
+        type=float,
+        default=2,
+        help="p value for noise in NTWD"
+    )
+    parser.add_argument(
+        "--lambda_",
+        type=float,
+        default=0.0,
+        help="lambda for noise in NTWD"
+    )
+    parser.add_argument(
+        '--noisy_mode',
+        type=str,
+        default=None,
+        help='noisy mode for NTWD, could be None'
+    )
+    parser.add_argument(
+        '--rho',
+        type=float,
+        default=1.0,
+        help='FR-ROT fiber uncertainty radius in [0, 1]')
+    parser.add_argument(
+        '--fiber_tau',
+        type=float,
+        default=1.0,
+        help='Positive scale for normalized linear residual features in FR-ROT')
+    parser.add_argument(
+        '--ftype',
+        type=str,
+        default='linear',
+        help='function type for nonlinear TWD, could be linear, poly, rbf'
+    )
+    parser.add_argument(
+        '--degree',
+        type=int,
+        default=3,
+        help='degree of polynomial for nonlinear TWD with poly ftype'
+    )
+    parser.add_argument(
+        '--radius',
+        type=float,
+        default=2.0,
+        help='radius of RBF for nonlinear TWD with rbf ftype'
+    )
+    parser.add_argument(
+        '--pow_beta',           
+        type=float,
+        default=1.0,
+        help='power of beta for nonlinear TWD with poly and rbf ftype'
+    )
+
+    opt = parser.parse_args()
+    return opt
