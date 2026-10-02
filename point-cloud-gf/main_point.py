@@ -17,6 +17,7 @@ import argparse
 import itertools
 import os
 import random
+import sys
 import time
 from pathlib import Path
 from typing import List
@@ -25,6 +26,11 @@ import numpy as np
 import torch
 import torch.multiprocessing as mp
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from db_tsw.fr_rot import FRROTConcurrentLines
 from utils import SW, compute_true_Wasserstein  # utils.py
 from tsw import TWConcurrentLines, generate_trees_frames  # Treed SW implementation
 from n_tsw import NTWConcurrentLines  # n-TSW implementation
@@ -33,6 +39,7 @@ DEFAULT_LOSS_TYPES: List[str] = [
     "sw",        # sliced Wasserstein
     "twd",       # Treed Wasserstein (Gaussian directions)
     "ts_rot",   
+    "fr_rot",    # fiber-robust tree-Wasserstein
 
 ]
 DEFAULT_LRS: List[float] = [1e-2]
@@ -102,11 +109,31 @@ def build_ntwd_obj(device: torch.device, noisy_mode=None, lambda_=0.0, p_noise=2
         p_noise=p_noise
     )
     return obj
+
+
+def build_fr_rot_obj(
+    device: torch.device,
+    rho: float,
+    fiber_tau: float,
+    p_agg: float,
+) -> FRROTConcurrentLines:
+    """Build the fiber-only FR-ROT loss with fixed tree edge lengths."""
+    return FRROTConcurrentLines(
+        rho=rho,
+        fiber_tau=fiber_tau,
+        delta=10,
+        mass_division="distance_based",
+        p=1,
+        p_agg=p_agg,
+        device=device,
+    )
+
+
 def loss_fn(
     loss_type: str,
     X: torch.Tensor,
     Y: torch.Tensor,
-    twd_obj: TWConcurrentLines | None | NTWConcurrentLines,
+    twd_obj: TWConcurrentLines | NTWConcurrentLines | FRROTConcurrentLines | None,
     step: int,
 ) -> torch.Tensor:
     if loss_type == "sw":
@@ -158,7 +185,24 @@ def run_one(args, loss_type: str, lr: float, gpu_id: int, data_path: str) -> Non
         Y = torch.tensor(arr[IND_TARGET], device=device)
         X = torch.tensor(arr[IND_SOURCE], requires_grad=True, device=device)
         N = Y.shape[0]
-        twd_obj = None if loss_type == "sw" else build_ntwd_obj(device, noisy_mode=args.noisy_mode, lambda_=args.lambda_, p_noise=args.p_noise) if loss_type.startswith("n_tsw") else build_twd_obj(device)
+        if loss_type == "sw":
+            twd_obj = None
+        elif loss_type == "fr_rot":
+            twd_obj = build_fr_rot_obj(
+                device,
+                rho=args.rho,
+                fiber_tau=args.fiber_tau,
+                p_agg=args.p_agg,
+            )
+        elif loss_type.startswith("n_tsw"):
+            twd_obj = build_ntwd_obj(
+                device,
+                noisy_mode=args.noisy_mode,
+                lambda_=args.lambda_,
+                p_noise=args.p_noise,
+            )
+        else:
+            twd_obj = build_twd_obj(device)
         opt = torch.optim.Adam([X], lr=lr)
 
         traj, dists, times = [], [], []
@@ -181,7 +225,14 @@ def run_one(args, loss_type: str, lr: float, gpu_id: int, data_path: str) -> Non
 
         traj.append(Y.detach().cpu().numpy())
 
-        tag = f"{loss_type}_lr{lr:g}_src{IND_SOURCE}_tgt{IND_TARGET}"
+        if loss_type == "fr_rot":
+            loss_tag = (
+                f"fr_rot_rho{args.rho:g}_tau{args.fiber_tau:g}"
+                f"_pagg{args.p_agg:g}"
+            )
+        else:
+            loss_tag = loss_type
+        tag = f"{loss_tag}_lr{lr:g}_src{IND_SOURCE}_tgt{IND_TARGET}"
         np.save(f"saved/{tag}_seed{seed}_points.npy", np.stack(traj))
         np.savetxt(f"logs/{tag}_seed{seed}_distances.txt", np.array(dists), delimiter=",")
         w2_dist.append(dists)
@@ -219,7 +270,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--p_noise", type=int, default=2,
                    help="Dual norm exponent for noise regularization in n-TSW")
     p.add_argument("--p_agg", type=float, default=2.0,
-                   help="Aggregation exponent for n-TSW loss")
+                   help="Aggregation exponent for n-TSW or FR-ROT")
+    p.add_argument("--rho", type=float, default=1.0,
+                   help="Fiber uncertainty radius for FR-ROT")
+    p.add_argument("--fiber_tau", type=float, default=1.0,
+                   help="Residual feature scale for FR-ROT")
     return p.parse_args()
 
 # --------------------------------------------------------------------------------------------------

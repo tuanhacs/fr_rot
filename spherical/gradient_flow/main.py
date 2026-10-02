@@ -16,11 +16,12 @@ from train import run_exp
 import sys
 sys.path.append('../')
 import utils.vmf as vmf_utils
-import utils.plot as plot_utils
 from utils.func import set_seed
-from methods import s3wd, sswd, stswd, sbstsd, ntwd
+from methods import sswd, stswd, sbstsd, ntwd, fr_rot
 
 def plot_result(X, out_path):
+    import utils.plot as plot_utils
+
     k = gaussian_kde(X.T)
     fig, ax = plt.subplots(1, 1, figsize=(10,10), subplot_kw={'projection': "mollweide"})
     plot_utils.projection_mollweide(lambda x: k.pdf(x.T), ax)
@@ -28,6 +29,8 @@ def plot_result(X, out_path):
     plt.close(fig)
 
 def get_run_name(args):
+    if args.d_func == "fr_rot":
+        return f"fr_rot-rho_{args.rho}-tau_{args.fiber_tau}"
     if "sts" in args.d_func:
         return f"{args.d_func}-delta_{args.delta}-p_{args.p}"
     return f"{args.d_func}"
@@ -48,6 +51,8 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--n_function', type=str, default='power')
     parser.add_argument('--p_agg', type=float, default=2)
+    parser.add_argument('--rho', type=float, default=1.0)
+    parser.add_argument('--fiber_tau', type=float, default=1.0)
     parser.add_argument('--noisy_mode', type=str, default=None)
     parser.add_argument('--lambda_', type=float, default=0.0)
     parser.add_argument('--p_noise', type=float, default=2)
@@ -88,6 +93,18 @@ if __name__ == "__main__":
     if args.d_func == "stsw":
         d_func = stswd.stswd
         d_args = {'p': args.p, 'ntrees': args.ntrees, 'nlines': args.nlines, 'delta': args.delta, 'device': device}
+    elif args.d_func == "fr_rot":
+        d_func = fr_rot.fr_rot
+        d_args = {
+            'p': 1,
+            'p_agg': args.p_agg,
+            'ntrees': args.ntrees,
+            'nlines': args.nlines,
+            'delta': args.delta,
+            'rho': args.rho,
+            'fiber_tau': args.fiber_tau,
+            'device': device,
+        }
     elif args.d_func == "sts_rot":
         d_func = ntwd.nsts
         d_args = {'p': args.p, 'ntrees': args.ntrees, 'nlines': args.nlines, 'delta': args.delta, 'device': device, 'noisy_mode': args.noisy_mode, 'lambda_': args.lambda_, 'p_noise': args.p_noise, 'p_agg': args.p_agg}
@@ -95,15 +112,23 @@ if __name__ == "__main__":
         d_func = sbstsd.sbsts
         d_args = {'p': args.p, 'ntrees': args.ntrees, 'nlines': args.nlines, 'delta': args.delta, 'device': device}
     elif args.d_func == "ari_s3w":
+        from methods import s3wd
+
         d_func = s3wd.ari_s3wd
         d_args = {'p': 2, 'n_projs': 1000, 'device': device, 'h': None, 'n_rotations': 30, 'pool_size': 1000}
     elif args.d_func == "s3w":
+        from methods import s3wd
+
         d_func = s3wd.s3wd
         d_args = {'p': 2, 'n_projs': 1000, 'device': device, 'h': None}
     elif args.d_func == "ri_s3w_1":
+        from methods import s3wd
+
         d_func = s3wd.ri_s3wd
         d_args = {'p': 2, 'n_projs': 1000, 'device': device, 'h': None, 'n_rotations': 1}
     elif args.d_func == "ri_s3w_5":
+        from methods import s3wd
+
         d_func = s3wd.ri_s3wd
         d_args = {'p': 2, 'n_projs': 1000, 'device': device, 'h': None, 'n_rotations': 5}
     elif args.d_func == "ssw":
@@ -157,5 +182,5 @@ if __name__ == "__main__":
     os.makedirs("logs", exist_ok=True)
     with open(f"all_resutls.txt", "a") as f:
         f.write(f"{get_run_name(args)}\n") 
-        f.write(f"\t{iter_log_wd[0]:.3f} $\pm$ {iter_std[0]:.3f} & {iter_log_wd[1]:.3f} $\pm$ {iter_std[1]:.3f} & \
-{iter_log_wd[2]:.3f} $\pm$ {iter_std[2]:.3f} & {iter_log_wd[3]:.3f} $\pm$ {iter_std[3]:.3f} & {iter_log_wd[4]:.3f} $\pm$ {iter_std[4]:.3f}\n\n")
+        f.write(f"\t{iter_log_wd[0]:.3f} $\\pm$ {iter_std[0]:.3f} & {iter_log_wd[1]:.3f} $\\pm$ {iter_std[1]:.3f} & \
+{iter_log_wd[2]:.3f} $\\pm$ {iter_std[2]:.3f} & {iter_log_wd[3]:.3f} $\\pm$ {iter_std[3]:.3f} & {iter_log_wd[4]:.3f} $\\pm$ {iter_std[4]:.3f}\n\n")

@@ -6,7 +6,6 @@ from tqdm.auto import trange
 
 import sys
 sys.path.append('../')
-from methods import wd
 from utils.func import set_seed
 
 def vmf_pdf(x, mu, kappa):
@@ -39,6 +38,8 @@ def run_exp(dataiter, d_func, d_args, mus, batch_size=200, n_steps=500, lr=1e-2,
         pbar.set_description(f"Loss: {sw.item():.4f}")
         
         if (i + 1) % 50 == 0:
+            from methods import wd
+
             w = wd.g_wasserstein(X0, Xt, p=2, device=device)    
             log_probs = torch.stack([vmf_pdf(X0, mu, kappa) for mu in mus])
             log_sum_probs = torch.logsumexp(log_probs, dim=0) - torch.log(torch.tensor(len(mus), device=device))
@@ -48,6 +49,8 @@ def run_exp(dataiter, d_func, d_args, mus, batch_size=200, n_steps=500, lr=1e-2,
 
         if eval_loss:
             with torch.no_grad():
+                from methods import wd
+
                 w = wd.g_wasserstein(X0, Xt, p=2, device=device)    
                 loss_w.append(w.item())
     if eval_loss:

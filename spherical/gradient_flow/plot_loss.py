@@ -13,7 +13,7 @@ import sys
 sys.path.append('../')
 import utils.vmf as vmf_utils
 from utils.func import set_seed
-from methods import s3wd, sswd, stswd
+from methods import sswd, stswd, fr_rot
 
 def vmf_pdf(x, mu, kappa):
     kappa = torch.tensor(kappa, dtype=torch.float32, device=x.device)
@@ -28,16 +28,36 @@ def get_config(method):
     elif method == "stsw_gen":
         d_func = stswd.stswd
         d_args = {'p': 2, 'ntrees': args.ntrees, 'nlines': args.nlines, 'delta': 10, 'device': device, 'type': 'generalized'}
+    elif method == "fr_rot":
+        d_func = fr_rot.fr_rot
+        d_args = {
+            'p': 1,
+            'p_agg': args.p_agg,
+            'ntrees': args.ntrees,
+            'nlines': args.nlines,
+            'delta': args.delta,
+            'rho': args.rho,
+            'fiber_tau': args.fiber_tau,
+            'device': device,
+        }
     elif method == "ari_s3w":
+        from methods import s3wd
+
         d_func = s3wd.ari_s3wd
         d_args = {'p': 2, 'n_projs': 1000, 'device': device, 'h': None, 'n_rotations': 30, 'pool_size': 1000}
     elif method == "s3w":
+        from methods import s3wd
+
         d_func = s3wd.s3wd
         d_args = {'p': 2, 'n_projs': 1000, 'device': device, 'h': None}
     elif method == "ri_s3w_1":
+        from methods import s3wd
+
         d_func = s3wd.ri_s3wd
         d_args = {'p': 2, 'n_projs': 1000, 'device': device, 'h': None, 'n_rotations': 1}
     elif method == "ri_s3w_5":
+        from methods import s3wd
+
         d_func = s3wd.ri_s3wd
         d_args = {'p': 2, 'n_projs': 1000, 'device': device, 'h': None, 'n_rotations': 5}
     elif method == "ssw":
@@ -56,6 +76,10 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', '-ep', type=int, default=200)
     parser.add_argument('--lr', type=float, default=1e-2)
     parser.add_argument('--batch_size', type=int, default=2400)
+    parser.add_argument('--delta', type=float, default=2.0)
+    parser.add_argument('--p_agg', type=float, default=2.0)
+    parser.add_argument('--rho', type=float, default=1.0)
+    parser.add_argument('--fiber_tau', type=float, default=1.0)
     
     args = parser.parse_args()
     set_seed(2025)
@@ -91,7 +115,7 @@ if __name__ == "__main__":
 
     plt.figure(figsize=(8, 4))
     iterations = np.arange(args.epochs)
-    methods = ['stsw', 'stsw_gen']
+    methods = ['stsw', 'stsw_gen', 'fr_rot']
     for i, method in enumerate(methods):
         L = np.zeros((args.ntry, args.epochs))
         for i in range(args.ntry):

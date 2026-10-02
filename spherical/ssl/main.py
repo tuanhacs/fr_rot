@@ -20,11 +20,11 @@ import sys
 import os
 sys.path.append("../")
 from methods.sswd import sswd_unif as sliced_wasserstein_sphere_uniform
-from methods.s3wd import s3wd, ri_s3wd, ari_s3wd
 from methods.swd import swd
 from methods.stswd import stswd
 from methods.sbstsd import sbsts
 from methods.ntwd import nsts
+from methods.fr_rot import fr_rot
 @dataparser
 class Options:
     "Pre-training script"
@@ -66,6 +66,8 @@ class Options:
     lambda_: float = 0.0
     p_noise: float = 2
     p_agg: float = 2.0
+    rho: float = 1.0
+    fiber_tau: float = 1.0
 
 
 def prepare_loader(opt: Options) -> DataLoader:
@@ -189,6 +191,8 @@ def pretrain(opt: Options):
         return align_loss_val, unif_loss_val
     
     def s3w_loss(x, y):
+        from methods.s3wd import s3wd
+
         align_loss_val = align_loss(x, y, alpha=opt.align_alpha)
 
         x0 = torch.randn_like(x, device=x.device)
@@ -204,6 +208,8 @@ def pretrain(opt: Options):
         return align_loss_val, unif_loss_val
     
     def ri_s3w_loss(x, y):
+        from methods.s3wd import ri_s3wd
+
         align_loss_val = align_loss(x, y, alpha=opt.align_alpha)
 
         x0 = torch.randn_like(x, device=x.device)
@@ -219,6 +225,8 @@ def pretrain(opt: Options):
         return align_loss_val, unif_loss_val
     
     def ari_s3w_loss(x, y):
+        from methods.s3wd import ari_s3wd
+
         align_loss_val = align_loss(x, y, alpha=opt.align_alpha)
 
         x0 = torch.randn_like(x, device=x.device)
@@ -305,6 +313,39 @@ def pretrain(opt: Options):
             nsts(y, y0, ntrees=opt.ntrees, nlines=opt.nlines, p=opt.p, delta=opt.delta, device=x.device, noisy_mode=opt.noisy_mode, lambda_=opt.lambda_, p_noise=opt.p_noise, p_agg=opt.p_agg)
         ) / 2
         return align_loss_val, unif_loss_val
+    def fr_rot_loss(x, y):
+        align_loss_val = align_loss(x, y, alpha=opt.align_alpha)
+
+        x0 = F.normalize(torch.randn_like(x), p=2, dim=-1)
+        y0 = F.normalize(torch.randn_like(y), p=2, dim=-1)
+
+        unif_loss_val = (
+            fr_rot(
+                x,
+                x0,
+                ntrees=opt.ntrees,
+                nlines=opt.nlines,
+                p=1,
+                p_agg=opt.p_agg,
+                delta=opt.delta,
+                rho=opt.rho,
+                fiber_tau=opt.fiber_tau,
+                device=x.device,
+            )
+            + fr_rot(
+                y,
+                y0,
+                ntrees=opt.ntrees,
+                nlines=opt.nlines,
+                p=1,
+                p_agg=opt.p_agg,
+                delta=opt.delta,
+                rho=opt.rho,
+                fiber_tau=opt.fiber_tau,
+                device=y.device,
+            )
+        ) / 2
+        return align_loss_val, unif_loss_val
     def simclr_loss(x, y):
         b = x.size(0)
         z = torch.cat((x, y))
@@ -327,6 +368,7 @@ def pretrain(opt: Options):
         "sbsts": sbsts_loss,
         "stsw_gen": stsw_gen_loss,
         "sts_rot": nsts_loss,
+        "fr_rot": fr_rot_loss,
     }[opt.method]
 
     align_meter = AverageMeter("align_loss")
