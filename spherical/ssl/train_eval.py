@@ -47,8 +47,6 @@ def train_eval(opt: Options):
         f"_ntrees_{opt.ntrees}_nlines_{opt.nlines}_delta_{opt.delta}_p_{opt.p}"
         f"_unif_w_{opt.unif_w}_align_w_{opt.align_w}"
         f"_lr_{opt.lr}_momentum_{opt.momentum}_seed_{opt.seed}_weight_decay_{opt.weight_decay}"
-        f"_n_function_{opt.n_function}"
-        f"_noisy_mode_{opt.noisy_mode}_lambda_{opt.lambda_}_p_noise_{opt.p_noise}"
         f"_rho_{opt.rho}_fiber_tau_{opt.fiber_tau}_p_agg_{opt.p_agg}"
         + (opt.identifier if opt.identifier is not None else "")
     )
