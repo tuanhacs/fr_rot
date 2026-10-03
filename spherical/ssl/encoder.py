@@ -10,7 +10,7 @@ from torchvision.models.resnet import resnet18
 
 class L2Norm(nn.Module):
     def forward(self, x):
-        return x / x.norm(p=2, dim=1, keepdim=True)
+        return F.normalize(x, p=2, dim=1, eps=1e-8)
 
 
 class ResNet(nn.Module):

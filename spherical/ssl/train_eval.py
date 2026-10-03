@@ -35,6 +35,10 @@ class Options:
     weight_decay: float = 1e-3
 
     gpus: Tuple[int] = (0,)
+    n_function: str = "power"  # Options: power, exp, exp_squared, linear
+    noisy_mode: str = None  # Options: None, 'interval', 'ball'
+    lambda_: float = 0.0
+    p_noise: int = 2
     p_agg: float = 2.0
     rho: float = 1.0
     fiber_tau: float = 1.0
@@ -47,6 +51,8 @@ def train_eval(opt: Options):
         f"_ntrees_{opt.ntrees}_nlines_{opt.nlines}_delta_{opt.delta}_p_{opt.p}"
         f"_unif_w_{opt.unif_w}_align_w_{opt.align_w}"
         f"_lr_{opt.lr}_momentum_{opt.momentum}_seed_{opt.seed}_weight_decay_{opt.weight_decay}"
+        f"_n_function_{opt.n_function}"
+        f"_noisy_mode_{opt.noisy_mode}_lambda_{opt.lambda_}_p_noise_{opt.p_noise}"
         f"_rho_{opt.rho}_fiber_tau_{opt.fiber_tau}_p_agg_{opt.p_agg}"
         + (opt.identifier if opt.identifier is not None else "")
     )
@@ -83,6 +89,10 @@ def train_eval(opt: Options):
         p=opt.p,
         weight_decay=opt.weight_decay,
         gpus=opt.gpus,
+        n_function=opt.n_function,
+        noisy_mode=opt.noisy_mode,
+        lambda_=opt.lambda_,
+        p_noise=opt.p_noise,
         p_agg=opt.p_agg,
         rho=opt.rho,
         fiber_tau=opt.fiber_tau,

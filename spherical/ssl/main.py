@@ -61,6 +61,10 @@ class Options:
     gpus: Tuple[int] = (1,) # Field(nargs="*", default=[1])
     identifier: str = "" # Field(default=None)
     seed: int = 0
+    n_function: str = "power"  # Options: power, exp, exp_squared, linear
+    noisy_mode: str = None  # Options: None, 'interval', 'ball'
+    lambda_: float = 0.0
+    p_noise: float = 2
     p_agg: float = 2.0
     rho: float = 1.0
     fiber_tau: float = 1.0
@@ -281,6 +285,34 @@ def pretrain(opt: Options):
             sbsts(y, y0, ntrees=opt.ntrees, nlines=opt.nlines, p=opt.p, delta=opt.delta, device=x.device)
         ) / 2
         return align_loss_val, unif_loss_val
+    def osbsts_loss(x, y):
+        align_loss_val = align_loss(x, y, alpha=opt.align_alpha)
+
+        x0 = torch.randn_like(x, device=x.device)
+        x0 = F.normalize(x0, p=2, dim=-1)
+
+        y0 = torch.randn_like(y, device=y.device)
+        y0 = F.normalize(y0, p=2, dim=-1)
+
+        unif_loss_val = (
+            osbsts(x, x0, ntrees=opt.ntrees, nlines=opt.nlines, p=opt.p, delta=opt.delta, device=x.device, n_function=opt.n_function) + 
+            osbsts(y, y0, ntrees=opt.ntrees, nlines=opt.nlines, p=opt.p, delta=opt.delta, device=x.device, n_function=opt.n_function)
+        ) / 2
+        return align_loss_val, unif_loss_val
+    def nsts_loss(x, y):
+        align_loss_val = align_loss(x, y, alpha=opt.align_alpha)
+
+        x0 = torch.randn_like(x, device=x.device)
+        x0 = F.normalize(x0, p=2, dim=-1)
+
+        y0 = torch.randn_like(y, device=y.device)
+        y0 = F.normalize(y0, p=2, dim=-1)
+
+        unif_loss_val = (
+            nsts(x, x0, ntrees=opt.ntrees, nlines=opt.nlines, p=opt.p, delta=opt.delta, device=x.device, noisy_mode=opt.noisy_mode, lambda_=opt.lambda_, p_noise=opt.p_noise, p_agg=opt.p_agg) + 
+            nsts(y, y0, ntrees=opt.ntrees, nlines=opt.nlines, p=opt.p, delta=opt.delta, device=x.device, noisy_mode=opt.noisy_mode, lambda_=opt.lambda_, p_noise=opt.p_noise, p_agg=opt.p_agg)
+        ) / 2
+        return align_loss_val, unif_loss_val
     def fr_rot_loss(x, y):
         align_loss_val = align_loss(x, y, alpha=opt.align_alpha)
 
@@ -335,6 +367,7 @@ def pretrain(opt: Options):
         "stsw": stsw_loss,
         "sbsts": sbsts_loss,
         "stsw_gen": stsw_gen_loss,
+        "sts_rot": nsts_loss,
         "fr_rot": fr_rot_loss,
     }[opt.method]
 

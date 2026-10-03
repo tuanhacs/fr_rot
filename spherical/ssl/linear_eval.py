@@ -104,7 +104,7 @@ def linear_eval(opt: Options):
     torch.manual_seed(opt.seed)
     torch.cuda.set_device(opt.gpu)
     torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.benchmark = False
 
     encoder = ResNet(feat_dim=opt.feat_dim).to(opt.gpu)
     encoder.eval()
@@ -131,8 +131,13 @@ def linear_eval(opt: Options):
     classifier = nn.Linear(eval_numel, 10).to(opt.gpu)
 
     optim = torch.optim.Adam(classifier.parameters(), lr=opt.lr, betas=(0.5, 0.999))
+    milestones = [
+        int(epoch.strip())
+        for epoch in opt.lr_decay_epochs.split(",")
+        if epoch.strip()
+    ]
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
-        optim, gamma=opt.lr_decay_rate, milestones=opt.lr_decay_epochs
+        optim, gamma=opt.lr_decay_rate, milestones=milestones
     )
     loss_meter = AverageMeter("loss")
     it_time_meter = AverageMeter("iter_time")
