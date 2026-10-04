@@ -38,6 +38,8 @@ class Options:
     p_agg: float = 2.0
     rho: float = 1.0
     fiber_tau: float = 1.0
+    num_frequencies: int = 1
+    rff_sigma: float = 1.0
 
 
 def train_eval(opt: Options):
@@ -48,6 +50,7 @@ def train_eval(opt: Options):
         f"_unif_w_{opt.unif_w}_align_w_{opt.align_w}"
         f"_lr_{opt.lr}_momentum_{opt.momentum}_seed_{opt.seed}_weight_decay_{opt.weight_decay}"
         f"_rho_{opt.rho}_fiber_tau_{opt.fiber_tau}_p_agg_{opt.p_agg}"
+        f"_num_frequencies_{opt.num_frequencies}_rff_sigma_{opt.rff_sigma}"
         + (opt.identifier if opt.identifier is not None else "")
     )
 
@@ -86,6 +89,8 @@ def train_eval(opt: Options):
         p_agg=opt.p_agg,
         rho=opt.rho,
         fiber_tau=opt.fiber_tau,
+        num_frequencies=opt.num_frequencies,
+        rff_sigma=opt.rff_sigma,
     )
 
     pretrain_start = time.time()

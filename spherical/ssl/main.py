@@ -25,6 +25,7 @@ from methods.stswd import stswd
 from methods.sbstsd import sbsts
 from methods.ntwd import nsts
 from methods.fr_rot import fr_rot
+from methods.rff_fr_rot import rff_fr_rot
 @dataparser
 class Options:
     "Pre-training script"
@@ -64,6 +65,8 @@ class Options:
     p_agg: float = 2.0
     rho: float = 1.0
     fiber_tau: float = 1.0
+    num_frequencies: int = 1
+    rff_sigma: float = 1.0
 
 
 def prepare_loader(opt: Options) -> DataLoader:
@@ -342,6 +345,27 @@ def pretrain(opt: Options):
             )
         ) / 2
         return align_loss_val, unif_loss_val
+    def rff_fr_rot_loss(x, y):
+        align_loss_val = align_loss(x, y, alpha=opt.align_alpha)
+
+        x0 = F.normalize(torch.randn_like(x), p=2, dim=-1)
+        y0 = F.normalize(torch.randn_like(y), p=2, dim=-1)
+        common = dict(
+            ntrees=opt.ntrees,
+            nlines=opt.nlines,
+            p=1,
+            p_agg=opt.p_agg,
+            delta=opt.delta,
+            rho=opt.rho,
+            fiber_tau=opt.fiber_tau,
+            num_frequencies=opt.num_frequencies,
+            rff_sigma=opt.rff_sigma,
+        )
+        unif_loss_val = (
+            rff_fr_rot(x, x0, device=x.device, **common)
+            + rff_fr_rot(y, y0, device=y.device, **common)
+        ) / 2
+        return align_loss_val, unif_loss_val
     def simclr_loss(x, y):
         b = x.size(0)
         z = torch.cat((x, y))
@@ -365,6 +389,7 @@ def pretrain(opt: Options):
         "stsw_gen": stsw_gen_loss,
         "sts_rot": nsts_loss,
         "fr_rot": fr_rot_loss,
+        "rff_fr_rot": rff_fr_rot_loss,
     }[opt.method]
 
     align_meter = AverageMeter("align_loss")

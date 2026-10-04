@@ -13,7 +13,7 @@ import sys
 sys.path.append('../')
 import utils.vmf as vmf_utils
 from utils.func import set_seed
-from methods import sswd, stswd, fr_rot
+from methods import sswd, stswd, fr_rot, rff_fr_rot
 
 def vmf_pdf(x, mu, kappa):
     kappa = torch.tensor(kappa, dtype=torch.float32, device=x.device)
@@ -28,6 +28,15 @@ def get_config(method):
     elif method == "stsw_gen":
         d_func = stswd.stswd
         d_args = {'p': 2, 'ntrees': args.ntrees, 'nlines': args.nlines, 'delta': 10, 'device': device, 'type': 'generalized'}
+    elif method == "rff_fr_rot":
+        d_func = rff_fr_rot.rff_fr_rot
+        d_args = {
+            'p': 1, 'p_agg': args.p_agg, 'ntrees': args.ntrees,
+            'nlines': args.nlines, 'delta': args.delta, 'rho': args.rho,
+            'fiber_tau': args.fiber_tau,
+            'num_frequencies': args.num_frequencies,
+            'rff_sigma': args.rff_sigma, 'device': args.device,
+        }
     elif method == "fr_rot":
         d_func = fr_rot.fr_rot
         d_args = {
@@ -80,6 +89,8 @@ if __name__ == "__main__":
     parser.add_argument('--p_agg', type=float, default=2.0)
     parser.add_argument('--rho', type=float, default=1.0)
     parser.add_argument('--fiber_tau', type=float, default=1.0)
+    parser.add_argument('--num_frequencies', type=int, default=1)
+    parser.add_argument('--rff_sigma', type=float, default=1.0)
     
     args = parser.parse_args()
     set_seed(2025)
@@ -115,7 +126,7 @@ if __name__ == "__main__":
 
     plt.figure(figsize=(8, 4))
     iterations = np.arange(args.epochs)
-    methods = ['stsw', 'stsw_gen', 'fr_rot']
+    methods = ['stsw', 'stsw_gen', 'fr_rot', 'rff_fr_rot']
     for i, method in enumerate(methods):
         L = np.zeros((args.ntry, args.epochs))
         for i in range(args.ntry):

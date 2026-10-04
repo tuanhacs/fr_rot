@@ -31,6 +31,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from db_tsw.fr_rot import FRROTConcurrentLines
+from db_tsw.rff_fr_rot import RFFFRROTConcurrentLines
 from utils import SW, compute_true_Wasserstein  # utils.py
 from tsw import TWConcurrentLines, generate_trees_frames  # Treed SW implementation
 from n_tsw import NTWConcurrentLines  # n-TSW implementation
@@ -40,6 +41,7 @@ DEFAULT_LOSS_TYPES: List[str] = [
     "twd",       # Treed Wasserstein (Gaussian directions)
     "ts_rot",   
     "fr_rot",    # fiber-robust tree-Wasserstein
+    "rff_fr_rot", # random-Fourier fiber-robust tree-Wasserstein
 
 ]
 DEFAULT_LRS: List[float] = [1e-2]
@@ -129,11 +131,32 @@ def build_fr_rot_obj(
     )
 
 
+def build_rff_fr_rot_obj(
+    device: torch.device,
+    rho: float,
+    fiber_tau: float,
+    num_frequencies: int,
+    rff_sigma: float,
+    p_agg: float,
+) -> RFFFRROTConcurrentLines:
+    return RFFFRROTConcurrentLines(
+        rho=rho,
+        fiber_tau=fiber_tau,
+        num_frequencies=num_frequencies,
+        rff_sigma=rff_sigma,
+        delta=10,
+        mass_division="distance_based",
+        p=1,
+        p_agg=p_agg,
+        device=device,
+    )
+
+
 def loss_fn(
     loss_type: str,
     X: torch.Tensor,
     Y: torch.Tensor,
-    twd_obj: TWConcurrentLines | NTWConcurrentLines | FRROTConcurrentLines | None,
+    twd_obj: TWConcurrentLines | NTWConcurrentLines | FRROTConcurrentLines | RFFFRROTConcurrentLines | None,
     step: int,
 ) -> torch.Tensor:
     if loss_type == "sw":
@@ -187,6 +210,15 @@ def run_one(args, loss_type: str, lr: float, gpu_id: int, data_path: str) -> Non
         N = Y.shape[0]
         if loss_type == "sw":
             twd_obj = None
+        elif loss_type == "rff_fr_rot":
+            twd_obj = build_rff_fr_rot_obj(
+                device,
+                rho=args.rho,
+                fiber_tau=args.fiber_tau,
+                num_frequencies=args.num_frequencies,
+                rff_sigma=args.rff_sigma,
+                p_agg=args.p_agg,
+            )
         elif loss_type == "fr_rot":
             twd_obj = build_fr_rot_obj(
                 device,
@@ -225,7 +257,13 @@ def run_one(args, loss_type: str, lr: float, gpu_id: int, data_path: str) -> Non
 
         traj.append(Y.detach().cpu().numpy())
 
-        if loss_type == "fr_rot":
+        if loss_type == "rff_fr_rot":
+            loss_tag = (
+                f"rff_fr_rot_rho{args.rho:g}_tau{args.fiber_tau:g}"
+                f"_K{args.num_frequencies}_sigma{args.rff_sigma:g}"
+                f"_pagg{args.p_agg:g}"
+            )
+        elif loss_type == "fr_rot":
             loss_tag = (
                 f"fr_rot_rho{args.rho:g}_tau{args.fiber_tau:g}"
                 f"_pagg{args.p_agg:g}"
@@ -275,6 +313,10 @@ def parse_args() -> argparse.Namespace:
                    help="Fiber uncertainty radius for FR-ROT")
     p.add_argument("--fiber_tau", type=float, default=1.0,
                    help="Residual feature scale for FR-ROT")
+    p.add_argument("--num_frequencies", type=int, default=1,
+                   help="Number of random Fourier frequencies for RFF-FR-ROT")
+    p.add_argument("--rff_sigma", type=float, default=1.0,
+                   help="Gaussian-kernel bandwidth for RFF-FR-ROT")
     return p.parse_args()
 
 # --------------------------------------------------------------------------------------------------

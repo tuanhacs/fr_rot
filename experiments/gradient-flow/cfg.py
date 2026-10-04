@@ -107,6 +107,16 @@ def parse_args():
         default=1.0,
         help='Positive scale for normalized linear residual features in FR-ROT')
     parser.add_argument(
+        '--num_frequencies',
+        type=int,
+        default=1,
+        help='Number of random Fourier frequencies in RFF-FR-ROT')
+    parser.add_argument(
+        '--rff_sigma',
+        type=float,
+        default=1.0,
+        help='Gaussian-kernel bandwidth for RFF-FR-ROT frequencies')
+    parser.add_argument(
         '--ftype',
         type=str,
         default='linear',

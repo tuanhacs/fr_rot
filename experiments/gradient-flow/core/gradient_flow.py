@@ -2,6 +2,7 @@ import numpy as np
 
 from db_tsw.n_tsw import NTWConcurrentLines
 from db_tsw.fr_rot import FRROTConcurrentLines
+from db_tsw.rff_fr_rot import RFFFRROTConcurrentLines
 import torch
 from torch import optim
 from db_tsw.db_tsw import TWConcurrentLines
@@ -235,6 +236,21 @@ def FRROT(X, Y, theta, intercept, mass_division='distance_based', p=1,
         device=device,
     )
     return FRROT_obj(X, Y, theta, intercept)
+def RFFFRROT(X, Y, theta, intercept, mass_division='distance_based', p=1,
+             delta=2., device='cuda', rho=1.0, fiber_tau=1.0,
+             num_frequencies=1, rff_sigma=1.0, p_agg=1):
+    loss = RFFFRROTConcurrentLines(
+        rho=rho,
+        fiber_tau=fiber_tau,
+        num_frequencies=num_frequencies,
+        rff_sigma=rff_sigma,
+        delta=delta,
+        mass_division=mass_division,
+        p=p,
+        p_agg=p_agg,
+        device=device,
+    )
+    return loss(X, Y, theta, intercept)
 def SbTS(X, Y, theta, intercept, mass_division = 'distance_based', p = 2, delta = 2., device = 'cuda'):
     # print(p)
     # print(delta)
@@ -353,7 +369,6 @@ def maxTWD(X,Y,n_lines,iterations=50,lr=1e-4, device="cuda"):
 
     res = TWD(X.to(device),Y.to(device),theta.to(device), intercept, subsequent_sources)
     return res
-
 
 
 

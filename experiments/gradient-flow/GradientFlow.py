@@ -31,11 +31,12 @@ config_hash = hashlib.sha1(
 ).hexdigest()[:10]
 folder_info = (
     f"dataset-{args.dataset_name}_L-{args.L}_k-{args.n_lines}_"
-    f"rho-{args.rho}_tau-{args.fiber_tau}_{config_hash}"
+    f"rho-{args.rho}_tau-{args.fiber_tau}_K-{args.num_frequencies}_"
+    f"sigma-{args.rff_sigma}_{config_hash}"
 )
-modes = ['linear'] * 9
-titles = ['FR_ROT', 'TS_ROT', 'TSW-SL-distance-based', 'TSW-SL-uniform', 'SpatialTSW', 'LCVSW', 'SWGG', 'SW', 'MaxSW']
-colors = ['navy', 'blue', 'orange', 'red', 'green', 'purple', 'brown', 'pink', 'cyan']
+modes = ['linear'] * 10
+titles = ['RFF_FR_ROT', 'FR_ROT', 'TS_ROT', 'TSW-SL-distance-based', 'TSW-SL-uniform', 'SpatialTSW', 'LCVSW', 'SWGG', 'SW', 'MaxSW']
+colors = ['black', 'navy', 'blue', 'orange', 'red', 'green', 'purple', 'brown', 'pink', 'cyan']
 
 # Arrays to store results
 results = {}
@@ -49,8 +50,8 @@ for i, seed in enumerate(seeds):
     N = 500  # Number of samples from p_X
     Xs.append(load_data(name=dataset_name, n_samples=N, dim=2))
     Xs[i] -= Xs[i].mean(dim=0)[np.newaxis, :]  # Normalization
-lear_rates = [args.lr_tsw_sl] * 5 + [args.lr_sw] * 4
-n_projs = [int(args.L / args.n_lines)] * 5 + [args.L] * 4
+lear_rates = [args.lr_tsw_sl] * 6 + [args.lr_sw] * 4
+n_projs = [int(args.L / args.n_lines)] * 6 + [args.L] * 4
 # assert len(modes) == len(titles) == len(colors) == len(lear_rates) == len(n_projs)
 
 for k, title in enumerate(titles):
@@ -108,6 +109,34 @@ for k, title in enumerate(titles):
                     gen_mode='gaussian_raw',
                     device=device
                 )
+                loss += gradient_flow.RFFFRROT(
+                    X=X.to(device),
+                    Y=Y,
+                    theta=theta_twd,
+                    intercept=intercept_twd,
+                    mass_division='distance_based',
+                    p=1,
+                    delta=args.delta,
+                    device=device,
+                    rho=args.rho,
+                    fiber_tau=args.fiber_tau,
+                    num_frequencies=args.num_frequencies,
+                    rff_sigma=args.rff_sigma,
+                    p_agg=1,
+                )
+                end_time = time.time()
+
+            elif k == 1:
+                start_time = time.time()
+                theta_twd, intercept_twd = generate_trees_frames(
+                    ntrees=int(args.L / args.n_lines),
+                    nlines=args.n_lines,
+                    d=X.shape[1],
+                    mean=mean_X,
+                    std=args.std,
+                    gen_mode='gaussian_raw',
+                    device=device
+                )
                 loss += gradient_flow.FRROT(
                     X=X.to(device),
                     Y=Y,
@@ -123,7 +152,7 @@ for k, title in enumerate(titles):
                 )
                 end_time = time.time()
 
-            elif k == 1:
+            elif k == 2:
                 start_time = time.time()  # Start timing
                 theta_twd, intercept_twd = generate_trees_frames(
                     ntrees=int(args.L / args.n_lines),
@@ -139,7 +168,7 @@ for k, title in enumerate(titles):
                   # End timing
                 # print(f"Time taken for SW: {end_time - start_time:.4f} seconds")
 
-            elif k == 2:
+            elif k == 3:
                 start_time = time.time()  # Start timing
                 theta_twd, intercept_twd = generate_trees_frames(
                     ntrees=int(args.L / args.n_lines),
@@ -153,7 +182,7 @@ for k, title in enumerate(titles):
                 loss += gradient_flow.TWD(X=X.to(device), Y=Y, theta=theta_twd, intercept=intercept_twd, mass_division='distance_based', p=args.p_tsw, delta=args.delta, device=device) # delta 10
                 end_time = time.time()  # End timing
                 # print(f"Time taken for TWD distance based: {end_time - start_time:.4f} seconds")
-            elif k == 3:
+            elif k == 4:
                 start_time = time.time()  # Start timing
                 theta_twd, intercept_twd = generate_trees_frames(
                     ntrees=int(args.L / args.n_lines),
@@ -167,7 +196,7 @@ for k, title in enumerate(titles):
                 loss += gradient_flow.TWD(X=X.to(device), Y=Y, theta=theta_twd, intercept=intercept_twd, mass_division='uniform', p=args.p_tsw, device=device)
                 end_time = time.time()  # End timing
                 # print(f"Time taken for TWD uniform: {end_time - start_time:.4f} seconds")
-            elif k == 4:
+            elif k == 5:
                 start_time = time.time()  # Start timing
                 theta_twd, intercept_twd = generate_trees_frames(
                     ntrees=int(args.L / args.n_lines),
@@ -181,7 +210,7 @@ for k, title in enumerate(titles):
                 loss += gradient_flow.NonlinearTWD(X=X.to(device), Y=Y, theta=theta_twd, intercept=intercept_twd, mass_division='distance_based', p=args.p_tsw, delta=args.delta, device=device, ftype=args.ftype, degree=args.degree, radius=args.radius, pow_beta=args.pow_beta) # delta 10
                 end_time = time.time()  # End timing
                 # print(f"Time taken for TWD distance based: {end_time - start_time:.4f} seconds")
-            elif k == 5:
+            elif k == 6:
                 start_time = time.time()  # Start timing
                 loss += gradient_flow.LCVSW(
                     X.to(device), Y.to(device), L=args.L, device=device
@@ -189,18 +218,18 @@ for k, title in enumerate(titles):
                 end_time = time.time()  # End timing
                 # print(f"Time taken for LCVSW: {end_time - start_time:.4f} seconds")
 
-            elif k == 6:
+            elif k == 7:
                 start_time = time.time()  # Start timing
                 l, theta = gsw_res.SWGG_CP(X.to(device), Y.to(device), theta=None)
                 loss += l
                 end_time = time.time()  # End timing
                 # print(f"Time taken for SWGG_CP: {end_time - start_time:.4f} seconds")
-            elif k == 7:
+            elif k == 8:
                 start_time = time.time()  # Start timing
                 loss += gsw_res.sw(X.to(device), Y, theta=None)
                 end_time = time.time()
                 # print(f"Time taken for TWD orthogonal: {end_time - start_time:.4f} seconds")
-            elif k == 8:
+            elif k == 9:
                 start_time = time.time()  # Start timing
                 l, theta, loss_max = gsw_res.max_sw(X.to(device), Y, iterations=100, lr=lear_rates[k])
                 loss += l
