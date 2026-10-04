@@ -61,10 +61,6 @@ class Options:
     gpus: Tuple[int] = (1,) # Field(nargs="*", default=[1])
     identifier: str = "" # Field(default=None)
     seed: int = 0
-    n_function: str = "power"  # Options: power, exp, exp_squared, linear
-    noisy_mode: str = None  # Options: None, 'interval', 'ball'
-    lambda_: float = 0.0
-    p_noise: float = 2
     p_agg: float = 2.0
     rho: float = 1.0
     fiber_tau: float = 1.0
