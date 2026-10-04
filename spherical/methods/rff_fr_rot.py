@@ -66,7 +66,6 @@ class SphericalRFFFRROT:
         )
         omega = torch.randn(
             self.ntrees,
-            self.nlines,
             self.num_frequencies,
             X.shape[1],
             device=X.device,
@@ -119,16 +118,20 @@ class SphericalRFFFRROT:
             self.fiber_tau**2 + residual_norm.square()
         )
 
-        omega_dot_x = torch.einsum("tlkd,nd->tlkn", omega, samples)
-        omega_dot_root = torch.einsum("tlkd,tqd->tlkq", omega, root).squeeze(-1)
-        omega_dot_meridian = torch.einsum("tlkd,tld->tlk", omega, meridians)
-        phase = omega_dot_x - (
-            omega_dot_root.unsqueeze(-1) * root_cosine[:, None, None, :]
+        # Share frequencies across the meridians of each tree, so the only
+        # O(d) point-frequency product is computed once per tree.
+        omega_dot_x = torch.einsum("tkd,nd->tkn", omega, samples)
+        omega_dot_root = torch.einsum("tkd,tqd->tkq", omega, root).squeeze(-1)
+        omega_dot_meridian = torch.einsum("tkd,tld->tlk", omega, meridians)
+        phase = omega_dot_x.unsqueeze(1) - (
+            omega_dot_root[:, None, :, None] * root_cosine[:, None, None, :]
             + omega_dot_meridian.unsqueeze(-1)
             * sin_coordinate[:, None, None, :]
         )
-        fourier = torch.stack((torch.cos(phase), torch.sin(phase)), dim=-1)
-        fourier = fourier.permute(0, 1, 3, 2, 4).flatten(start_dim=-2)
+        fourier = torch.cat(
+            (torch.cos(phase).transpose(2, 3), torch.sin(phase).transpose(2, 3)),
+            dim=-1,
+        )
         features = torch.cat(
             (torch.ones_like(radial_gate).unsqueeze(-1), fourier), dim=-1
         )

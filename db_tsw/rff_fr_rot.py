@@ -59,7 +59,7 @@ class RFFFRROTConcurrentLines:
         self.p_agg = p_agg
         self.device = device
 
-    def __call__(self, X, Y, theta, intercept):
+    def __call__(self, X, Y, theta, intercept, omega=None):
         device = X.device
         Y = Y.to(device)
         theta = theta.to(device=device, dtype=X.dtype)
@@ -70,13 +70,19 @@ class RFFFRROTConcurrentLines:
         if X.shape[1] != Y.shape[1]:
             raise ValueError("X and Y must have the same ambient dimension")
 
-        omega = torch.randn(
-            *theta.shape[:2],
-            self.num_frequencies,
-            X.shape[1],
-            device=device,
-            dtype=X.dtype,
-        ) / self.rff_sigma
+        if omega is None:
+            omega = torch.randn(
+                theta.shape[0],
+                self.num_frequencies,
+                X.shape[1],
+                device=device,
+                dtype=X.dtype,
+            ) / self.rff_sigma
+        else:
+            expected = (theta.shape[0], self.num_frequencies, X.shape[1])
+            if tuple(omega.shape) != expected:
+                raise ValueError(f"omega must have shape {expected}, got {tuple(omega.shape)}")
+            omega = omega.to(device=device, dtype=X.dtype)
 
         coordinate_X, mass_X, feature_X = self.project(
             X, theta, intercept, omega
@@ -122,13 +128,18 @@ class RFFFRROTConcurrentLines:
         )
 
         # w^T r = w^T(x-c) - <theta,x-c><w,theta>.
-        omega_dot_translated = torch.einsum("tlkd,tnd->tlkn", omega, translated)
-        omega_dot_theta = torch.einsum("tlkd,tld->tlk", omega, theta)
-        phase = omega_dot_translated - (
+        # Frequencies are shared by all lines of a tree.  The expensive
+        # ambient-dimensional product is therefore evaluated once per tree,
+        # rather than once per tree-line pair.
+        omega_dot_translated = torch.einsum("tkd,tnd->tkn", omega, translated)
+        omega_dot_theta = torch.einsum("tkd,tld->tlk", omega, theta)
+        phase = omega_dot_translated.unsqueeze(1) - (
             omega_dot_theta.unsqueeze(-1) * coordinates.unsqueeze(2)
         )
-        fourier = torch.stack((torch.cos(phase), torch.sin(phase)), dim=-1)
-        fourier = fourier.permute(0, 1, 3, 2, 4).flatten(start_dim=-2)
+        fourier = torch.cat(
+            (torch.cos(phase).transpose(2, 3), torch.sin(phase).transpose(2, 3)),
+            dim=-1,
+        )
         features = torch.cat(
             (torch.ones_like(radial_gate).unsqueeze(-1), fourier), dim=-1
         )
