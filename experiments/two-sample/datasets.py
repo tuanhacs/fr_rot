@@ -1,4 +1,4 @@
-"""Datasets used by Liu et al. (ICML 2020) two-sample experiments.
+"""Datasets used by the SOW and DK-for-TST two-sample experiments.
 
 The Blob and HDGM generators intentionally preserve the distributions and seed
 schedule of https://github.com/fengliu90/DK-for-TST.  Image loaders expose the
@@ -14,6 +14,37 @@ from pathlib import Path
 
 import torch
 import numpy as np
+
+
+def sample_rare_gaussian(
+    n: int,
+    seed: int,
+    null: bool = False,
+    dimension: int = 15,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Rare-mode alternative from the SOW two-sample experiment.
+
+    Under H1, Q = .95 N(0, I) + .025 N(2.5 e1, I)
+    + .025 N(-2.5 e1, I).  ``n`` is the number of observations in each
+    distribution, rather than a number of observations per mixture component.
+    """
+    if n < 1:
+        raise ValueError("n must be positive")
+    if dimension < 1:
+        raise ValueError("dimension must be positive")
+    generator = torch.Generator().manual_seed(seed)
+    x = torch.randn(n, dimension, generator=generator)
+    y = torch.randn(n, dimension, generator=generator)
+    if not null:
+        component = torch.multinomial(
+            torch.tensor([0.95, 0.025, 0.025]), n, replacement=True, generator=generator
+        )
+        y[:, 0] += torch.where(
+            component == 1,
+            y.new_tensor(2.5),
+            torch.where(component == 2, y.new_tensor(-2.5), y.new_tensor(0.0)),
+        )
+    return x, y
 
 
 def blob_covariances() -> np.ndarray:
@@ -101,14 +132,67 @@ def load_mnist_pools(data_dir: str | Path, fake_path: str | Path, image_size: in
     return real.float(), fake[:4000].float()
 
 
-def load_cifar_pools(data_dir: str | Path, cifar101_path: str | Path, image_size: int = 64):
+def load_mnist_digit_pools(data_dir: str | Path, image_size: int = 28):
+    """Return the empirical digit-6 and digit-9 distributions used by SOW.
+
+    ``ToTensor`` scales the grayscale pixels to [0, 1], which is the bounded
+    pixel preprocessing stated in the paper.  No trainable representation is
+    fitted on the test samples.
+    """
     from torchvision import datasets, transforms
 
-    transform = transforms.Compose([
-        transforms.Resize(image_size),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-    ])
+    operations = []
+    if image_size != 28:
+        operations.append(transforms.Resize(image_size))
+    operations.append(transforms.ToTensor())
+    dataset = datasets.MNIST(
+        str(data_dir), train=True, download=True, transform=transforms.Compose(operations)
+    )
+    targets = torch.as_tensor(dataset.targets)
+    six = torch.stack([dataset[i][0] for i in torch.where(targets == 6)[0].tolist()])
+    nine = torch.stack([dataset[i][0] for i in torch.where(targets == 9)[0].tolist()])
+    return six.float(), nine.float()
+
+
+def sample_mnist_mixture_pair(
+    six_pool: torch.Tensor,
+    nine_pool: torch.Tensor,
+    n: int,
+    seed: int,
+    null: bool = False,
+    contamination: float = 0.1,
+):
+    """Sample mu_6 versus .9 mu_6 + .1 mu_9 (or mu_6 under H0)."""
+    if not 0.0 <= contamination <= 1.0:
+        raise ValueError("contamination must lie in [0, 1]")
+    generator = torch.Generator().manual_seed(seed)
+    x = six_pool[torch.randint(len(six_pool), (n,), generator=generator)]
+    y = six_pool[torch.randint(len(six_pool), (n,), generator=generator)].clone()
+    if not null:
+        contaminated = torch.rand(n, generator=generator) < contamination
+        count = int(contaminated.sum())
+        if count:
+            y[contaminated] = nine_pool[
+                torch.randint(len(nine_pool), (count,), generator=generator)
+            ]
+    return x, y
+
+
+def load_cifar_pools(
+    data_dir: str | Path,
+    cifar101_path: str | Path,
+    image_size: int = 64,
+    normalize: bool = True,
+):
+    from torchvision import datasets, transforms
+
+    operations = []
+    if image_size != 32:
+        operations.append(transforms.Resize(image_size))
+    operations.append(transforms.ToTensor())
+    if normalize:
+        operations.append(transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
+    transform = transforms.Compose(operations)
     cifar = datasets.CIFAR10(str(data_dir), train=False, download=True, transform=transform)
     real = torch.stack([cifar[i][0] for i in range(len(cifar))])
     raw = np.load(cifar101_path)

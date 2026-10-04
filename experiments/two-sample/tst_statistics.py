@@ -53,24 +53,59 @@ def _quadratic_group_stat(matrix: torch.Tensor, labels: torch.Tensor, kind: str,
     return torch.cat(outputs)
 
 
-def median_bandwidth(z: torch.Tensor, max_points: int = 2000) -> torch.Tensor:
-    if len(z) > max_points:
+def median_bandwidth(z: torch.Tensor, max_points: int | None = None) -> torch.Tensor:
+    if max_points is not None and len(z) > max_points:
         z = z[:max_points]
     distances = torch.pdist(z)
     positive = distances[distances > 0]
     return positive.median().clamp_min(torch.finfo(z.dtype).eps)
 
 
-def mmd_test(z: torch.Tensor, labels: torch.Tensor, alpha: float, bandwidth: float | None = None):
+def mmd_test(
+    z: torch.Tensor,
+    labels: torch.Tensor,
+    alpha: float,
+    bandwidth: float | None = None,
+    kernel: str = "rbf",
+):
     bandwidth_t = median_bandwidth(z) if bandwidth is None else z.new_tensor(bandwidth)
-    sq_dist = torch.cdist(z, z).square()
-    kernel = torch.exp(-sq_dist / (2.0 * bandwidth_t.square()))
-    return finish_test(_quadratic_group_stat(kernel, labels, "mmd"), alpha)
+    distances = torch.cdist(z, z)
+    if kernel == "rbf":
+        kernel_matrix = torch.exp(-distances.square() / (2.0 * bandwidth_t.square()))
+    elif kernel == "laplace":
+        kernel_matrix = torch.exp(-distances / bandwidth_t)
+    else:
+        raise ValueError("kernel must be 'rbf' or 'laplace'")
+    return finish_test(_quadratic_group_stat(kernel_matrix, labels, "mmd"), alpha)
 
 
 def energy_test(z: torch.Tensor, labels: torch.Tensor, alpha: float):
     distances = torch.cdist(z, z)
     return finish_test(_quadratic_group_stat(distances, labels, "energy"), alpha)
+
+
+def sliced_wasserstein_test(
+    z: torch.Tensor,
+    labels: torch.Tensor,
+    alpha: float,
+    num_projections: int,
+    seed: int,
+    p: float = 2.0,
+):
+    """Monte Carlo SW_p with directions fixed across all label permutations."""
+    generator = torch.Generator(device=z.device).manual_seed(seed)
+    theta = torch.randn(
+        num_projections, z.shape[1], generator=generator, device=z.device, dtype=z.dtype
+    )
+    theta /= theta.norm(dim=1, keepdim=True).clamp_min(1e-12)
+    projected = z @ theta.T
+    values = []
+    for group in labels:
+        x = projected[group].sort(dim=0).values
+        y = projected[~group].sort(dim=0).values
+        per_direction = (x - y).abs().pow(p).mean(dim=0)
+        values.append(per_direction.mean().pow(1.0 / p))
+    return finish_test(torch.stack(values), alpha)
 
 
 class TreePermutationStatistic:

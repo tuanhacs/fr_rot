@@ -1,117 +1,162 @@
 # Two-sample testing
 
-This experiment ports the data construction and power-evaluation protocol from
-[DK-for-TST](https://github.com/fengliu90/DK-for-TST) to current PyTorch. It
-adds DbTSW, linear fiber DbTSW, and random-Fourier fiber DbTSW to a shared,
-label-permutation test.
+The default runner follows Section 4.2 of *Sliced Orlicz-Wasserstein* and
+adapts that protocol to DbTSW, linear fiber DbTSW, and random-Fourier fiber
+DbTSW.
 
-It also provides current-PyTorch ports of the main learned baselines from the
-reference pipeline: optimized-bandwidth MMD (`mmd_o`), deep-kernel MMD
-(`mmd_d`), and soft/hard classifier tests (`c2st_l`, `c2st_s`). Plain
-median-bandwidth MMD and energy distance are available as training-free checks.
-The original ME and SCF baselines are exposed as optional methods through
-`freqopttest`.
+For every sample size it uses:
 
-The original defaults are retained:
-
+- 200 independent trials;
+- 199 random label permutations per trial;
 - test level `alpha=0.05`;
-- 100 label permutations;
-- 10 outer trials;
-- 100 independently sampled test sets per outer trial;
-- Blob: 40 observations per mode, hence 360 observations per group;
-- HDGM: 1000 observations per mode and two modes;
-- MNIST: 100 observations per group;
-- CIFAR-10/CIFAR-10.1: 1000 observations per group.
+- equal sample size `n` from each distribution;
+- the same observed samples and permutation labels for every method;
+- the same tree realization for all tree methods;
+- fixed trees and RFF frequencies across the observed and permuted statistics;
+- a default tree-line budget `ntrees * nlines ~= n / 2`;
+- outer aggregation `p_agg=2`, matching the paper's `SOW_{phi,2}` setup.
 
-Unlike the legacy code, the implementation uses the finite-sample permutation
-p-value `(1 + exceedances) / (1 + permutations)`, supports CPU or CUDA, and
-caches every label-independent tree calculation. Trees and RFF frequencies are
-fixed within a permutation test.
+The reported rejection rate is test power under H1 and type-I error when
+`--null` is supplied.
 
-## Quick smoke runs
+## SOW protocol
 
-```bash
-python experiments/two-sample/run_tst.py --dataset blob \
-  --methods dbtsw fr_rot rff_fr_rot mmd energy \
-  --n 5 --ntrees 4 --nlines 2 --permutations 19 \
-  --outer-trials 1 --test-sets 2 --device cpu
+### Rare-mode Gaussian
 
-python experiments/two-sample/run_tst.py --dataset hdgm \
-  --methods dbtsw fr_rot rff_fr_rot mmd energy \
-  --n 1000 --dimension 10 --device cuda
+The paper uses
+
+```text
+P = N(0, I_15)
+Q = .95 P + .025 N(2.5 e_1, I_15) + .025 N(-2.5 e_1, I_15).
 ```
 
-Add `--null` to estimate type-I error instead of power.
-
-Learned baselines are opt-in because their paper defaults train for 1000 or
-2000 epochs in every outer trial:
+Run the Figure-3 sample-size grid:
 
 ```bash
-python experiments/two-sample/run_tst.py --dataset blob \
-  --methods mmd_o mmd_d c2st_l c2st_s --device cuda
+python experiments/two-sample/run_tst.py \
+  --dataset rare_gaussian \
+  --methods dbtsw fr_rot rff_fr_rot sw2 mmd_rbf mmd_laplace \
+  --device cuda
 ```
 
-Use `--train-epochs` for a smoke run; omitting it restores the paper defaults.
-
-For ME and SCF, install the same dependency used by the reference repository:
+The default sizes are `500 1000 1500 2000 2500`. A quick single-size run is:
 
 ```bash
-pip install git+https://github.com/wittawatj/interpretable-test
+python experiments/two-sample/run_tst.py \
+  --dataset rare_gaussian --n 500 \
+  --methods dbtsw rff_fr_rot sw2 mmd_rbf mmd_laplace \
+  --device cuda
 ```
 
-## MNIST
+### MNIST digit contamination
 
-Download `Fake_MNIST_data_EP100_N10000.pckl` from the link in the
-[DK-for-TST README](https://github.com/fengliu90/DK-for-TST#download-data), then
-run:
+The test compares
 
-```bash
-python experiments/two-sample/run_tst.py --dataset mnist \
-  --fake-mnist-path /path/to/Fake_MNIST_data_EP100_N10000.pckl \
-  --methods dbtsw fr_rot rff_fr_rot mmd energy --device cuda
+```text
+P = empirical distribution of digit 6
+Q = .9 P + .1 empirical distribution of digit 9.
 ```
 
-The loader uses the first 4000 real training images and first 4000 generated
-images, then creates disjoint train/test pools for every outer trial, matching
-the reference protocol.
-
-## CIFAR-10 versus CIFAR-10.1
-
-Use `cifar10.1_v4_data.npy` from
-[DK-for-TST](https://github.com/fengliu90/DK-for-TST/blob/master/cifar10.1_v4_data.npy):
+MNIST is downloaded by torchvision and pixels are scaled to `[0, 1]`. Run:
 
 ```bash
-python experiments/two-sample/run_tst.py --dataset cifar10 \
+python experiments/two-sample/run_tst.py \
+  --dataset mnist \
+  --methods dbtsw rff_fr_rot sw2 mmd_rbf mmd_laplace \
+  --device cuda
+```
+
+The default sizes are `200 400 600 800 1000`. Change the contamination level
+with `--contamination`.
+
+### CIFAR-10 versus CIFAR-10.1
+
+Place `cifar10.1_v4_data.npy` under `experiments/two-sample/data`, or pass
+its location explicitly:
+
+```bash
+python experiments/two-sample/run_tst.py \
+  --dataset cifar10 \
   --cifar101-path /path/to/cifar10.1_v4_data.npy \
+  --methods dbtsw rff_fr_rot sw2 mmd_rbf mmd_laplace \
+  --device cuda
+```
+
+The default sizes are `250 500 750 1000 1250`.
+
+Linear `fr_rot` stores a full residual feature for every point and tree line.
+On raw images, use `--permutation-chunk 1` or omit it in favor of
+`rff_fr_rot` if GPU memory or runtime is limiting. It is therefore excluded
+from the default image methods, but can still be requested explicitly.
+
+### Type-I error
+
+Append `--null` to any command. A valid permutation test should have a
+rejection rate close to 0.05:
+
+```bash
+python experiments/two-sample/run_tst.py \
+  --dataset mnist --n 200 --null \
+  --methods dbtsw rff_fr_rot sw2 mmd_rbf mmd_laplace \
+  --device cuda
+```
+
+### Sample sizes are configurable
+
+`n` is not fixed to 100. Use one size:
+
+```bash
+--n 500
+```
+
+or an arbitrary power curve:
+
+```bash
+--sample-sizes 100 200 400 800
+```
+
+`--sample-sizes` takes precedence over `--n`.
+
+## Legacy DK-for-TST protocol
+
+The previous Blob, HDGM, real-versus-generated MNIST, learned MMD, and C2ST
+pipeline remains available:
+
+```bash
+python experiments/two-sample/run_tst.py \
+  --protocol dk --dataset blob --n 40 \
+  --methods dbtsw fr_rot rff_fr_rot mmd mmd_o mmd_d c2st_l c2st_s \
+  --device cuda
+```
+
+The former MNIST experiment is now named `mnist_fake`:
+
+```bash
+python experiments/two-sample/run_tst.py \
+  --protocol dk --dataset mnist_fake --n 100 \
+  --fake-mnist-path /path/to/Fake_MNIST_data_EP100_N10000.pckl \
   --methods dbtsw rff_fr_rot mmd energy --device cuda
 ```
 
-The legacy code evaluates all remaining CIFAR-10.1 images at once after using
-1000 images for training. That makes group size depend on the pool and contains
-an incorrect C2ST group-size argument. This port uses the documented `n`
-observations per group for every independent test set.
+## Outputs
 
-For raw images, linear `fr_rot` materializes a residual vector for every
-tree/branch/point and is intentionally not in the recommended command.
-`rff_fr_rot` computes residual Fourier phases without storing that tensor.
+Each sample size produces a CSV containing every test decision and a JSON
+summary containing:
 
-## Important options
+- empirical rejection rate;
+- binomial standard error and Wilson 95% interval;
+- mean test runtime;
+- mean training time.
 
-- `--fusion max` reproduces the current fiber implementation;
-- `--fusion add` evaluates the additive fiber IPM;
-- `--rho`, `--fiber-tau`, `--num-frequencies`, `--rff-sigma` configure fibers;
-- `--ntrees`, `--nlines`, `--delta` configure the common tree system;
-- `--root-std 0` places roots at the pooled mean, using labels neither for tree
-  construction nor permutation calibration.
-
-Each run writes all individual decisions to CSV and aggregate power/type-I
-error to JSON under `experiments/two-sample/results`.
+A combined `*_power_curve.json` is also written when using the SOW protocol.
+Outputs are stored under `experiments/two-sample/results` unless `--output`
+is specified.
 
 ## Attribution
 
-The Blob and HDGM distributions, image preprocessing, default sample sizes,
-outer repetitions, and seed structure are adapted from the MIT-licensed
-DK-for-TST repository accompanying:
-
+The SOW protocol follows *Sliced Orlicz-Wasserstein*. The Blob, HDGM,
+real/fake MNIST, learned MMD, and C2ST experiments are modern PyTorch ports of
+the MIT-licensed
+[DK-for-TST](https://github.com/fengliu90/DK-for-TST) repository accompanying
 F. Liu et al., *Learning Deep Kernels for Non-Parametric Two-Sample Tests*,
 ICML 2020.
